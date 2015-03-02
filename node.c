@@ -1,4 +1,4 @@
-
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <stdio.h>
@@ -8,13 +8,17 @@
 #include <errno.h>
 
 #include "msg.h"
+#include "tools.h"
 
+int gsize;
+char hosts[9][64];
+unsigned long ports[9];
 
-void usage(char * cmd) {
-  printf("usage: %s  portNum groupFileList logFile timeoutValue averageAYATime failureProbability \n",
-	 cmd);
-}
-
+//void usage(char * cmd) 
+//void die(char *msg)
+//void dieF(char *msg)
+//int readGroup(char* fileName, char[][] hosts, unsigned long[] ports)
+//void checkGroup(unsigned long port, unsigned long[] ports)
 
 int main(int argc, char ** argv) {
 
@@ -32,8 +36,6 @@ int main(int argc, char ** argv) {
     return -1;
 }
   
-
-
   char * end;
   int err = 0;
 
@@ -45,6 +47,14 @@ int main(int argc, char ** argv) {
 
   groupListFileName = argv[2];
   logFileName       = argv[3];
+
+  gsize= readGroup(groupListFileName, hosts, ports);
+  checkGroup(port, ports, gsize);
+
+  FILE *logf= fopen(logFileName, "w+");
+  if(logf==NULL)
+	die("Can not write to the log file.");
+  fprintf(logf, "starting N%lu\n", port);
 
   timeoutValue      = strtoul(argv[4], &end, 10);
   if (argv[4] == end) {
@@ -59,7 +69,7 @@ int main(int argc, char ** argv) {
   }
 
   sendFailureProbability  = strtoul(argv[6], &end, 10);
-  if (argv[5] == end) {
+  if (argv[6] == end) {
     printf("sendFailureProbability conversion error\n");
     err++;
   }
@@ -85,7 +95,8 @@ int main(int argc, char ** argv) {
 
   // If you want to produce a repeatable sequence of "random" numbers
   // replace the call time() with an integer.
-  srandom(time());
+  //srandom(time());
+  srandom(510);
   
   int i;
   for (i = 0; i < 10; i++) {
@@ -99,6 +110,7 @@ int main(int argc, char ** argv) {
     printf("Random number %d is: %d\n", i, sc);
   }
 
+  fclose(logf);
   return 0;
   
 }

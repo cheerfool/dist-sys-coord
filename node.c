@@ -18,6 +18,7 @@ int gsize;
 char hosts[9][32];
 char ids[9][8];
 unsigned long ports[9];
+int electCount= 2;
 
 //void usage(char * cmd) 
 //void die(char *msg)
@@ -138,6 +139,10 @@ int main(int argc, char ** argv) {
 	char buffer[MAXLENGTH]; // I/O buffer
 	// Size of received message
 
+	int maxBufSize= sizeof(struct msg)+1;
+	char* recvBuffer= (char*)malloc(maxBufSize);
+	memset(recvBuffer, 0, sizeof(recvBuffer));
+	
 
 
 	// Set signal handler for alarm signal
@@ -152,13 +157,21 @@ int main(int argc, char ** argv) {
 
 	//set the alarm
 	alarm(timeoutValue);
-	ssize_t numBytesRcvd = recvfrom(sock, buffer, MAXLENGTH, 0, (struct sockaddr *) &clntAddr, &clntAddrLen);
+	ssize_t numBytesRcvd = recvfrom(sock, recvBuffer, maxBufSize, 0, (struct sockaddr *) &clntAddr, &clntAddrLen);
 	if (numBytesRcvd < 0){
 		if(errno==EINTR){
 			printf("Time out. Call an election.\n");
 			struct msg electMsg;
-			electMsg.msgID= ELECT;
-			electMsg.electionID= time();
+			electMsg.msgID= ANSWER;
+			electMsg.electionID= 131;
+			struct clock vectorClock[MAX_NODES];
+			struct clock curClock;
+			curClock.nodeId= port;
+			curClock.time= 1;
+			vectorClock[0]= curClock;
+			char* sendBuffer= (char*)malloc(maxBufSize);	
+			memcpy(sendBuffer, &electMsg, sizeof(electMsg));
+			int bufSize= strlen(sendBuffer);
 
 			int i;
 			for(i=0; i<gsize; i++){
@@ -168,10 +181,10 @@ int main(int argc, char ** argv) {
 				int rstVal = getaddrinfo(hosts[i], ids[i], &addrCriteria, &targetAddr);
 				if (rstVal != 0)
 					die("getaddrinfo() failed");
-				ssize_t numBytesSent = sendto(sock, "elect.", 6, 0, targetAddr->ai_addr, targetAddr->ai_addrlen);
+				ssize_t numBytesSent = sendto(sock, sendBuffer, bufSize, 0, targetAddr->ai_addr, targetAddr->ai_addrlen);
 				if (numBytesSent < 0)
 					die("sendto() failed)");
-				else if(numBytesSent != 6)
+				else if(numBytesSent != bufSize)
 					die("sendto() failed, sent unexpected number of bytes");
 				printf("Msg sent to %s:%d\n", hosts[i], ports[i]);
 			}
@@ -181,7 +194,10 @@ int main(int argc, char ** argv) {
 	}else{
 		printf("Received msg from ");
 		PrintSocketAddress((struct sockaddr *) &clntAddr, stdout);
-		printf(" : %s\n", buffer);		
+		struct msg recvMsg;
+		memcpy(&recvMsg, recvBuffer, sizeof(recvMsg));
+		printf(" : msgID-%d, electID-%d, node-N%d, time-%d\n", recvMsg.msgID, recvMsg.electionID, recvMsg.vectorClock[0].nodeId, recvMsg.vectorClock[0].time);	
+		free(recvBuffer);
 	}
 	alarm(0);
 

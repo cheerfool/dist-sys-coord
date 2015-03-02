@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <stdio.h>
 #include <errno.h>
+#include <arpa/inet.h>
 
 void usage(char *cmd); 
 
@@ -14,8 +15,12 @@ void die(char *msg);
 
 void dieF(char *msg);
 
-int readGroup(char *fileName, char hosts[][64], unsigned long ports[]);
-  
+int readGroup(char *fileName, char hosts[][32], char ids[][8]);
+
+void idToPort(char ids[][8], unsigned long ports[], int gsize);
+
 void checkGroup(unsigned long port, unsigned long ports[], int gsize);
+
+void PrintSocketAddress(const struct sockaddr *address, FILE *stream);
 
 #endif 

@@ -19,23 +19,15 @@ char hosts[MAX_NODES][32];
 char ids[MAX_NODES][8];
 unsigned long ports[9];
 int electCount= 2;
-struct clock myClockVector[MAX_NODES];
-//void usage(char * cmd) 
-//void die(char *msg)
-//void dieF(char *msg)
-//int readGroup(char* fileName, char[][] hosts, unsigned long[] ports)
-//void checkGroup(unsigned long port, unsigned long[] ports)
+struct clock myVectorClock[MAX_NODES];
 
 // Handler for SIGALRM
 void CatchAlarm(int ignored) {
 	printf("Time out captured.\n");
 }
 
-
 int main(int argc, char ** argv) {
-
-	// This is some sample code feel free to delete it
-
+	//parameters
 	unsigned long  port;
 	char *         groupListFileName;
 	char *         logFileName;
@@ -60,10 +52,12 @@ int main(int argc, char ** argv) {
 	groupListFileName = argv[2];
 	logFileName       = argv[3];
 
+	//read and store the group list file and check if current node is in the group list, if not, terminate the program 
 	gsize= readGroup(groupListFileName, hosts, ids);
 	idToPort(ids, ports, gsize);
 	checkGroup(port, ports, gsize);
 
+	//open the file to write logs
 	FILE *logf= fopen(logFileName, "w+");
 	if(logf==NULL)
 		die("Can not write to the log file.");
@@ -93,11 +87,11 @@ int main(int argc, char ** argv) {
 	printf("Timeout value:            %d\n", timeoutValue);  
 	printf("AYATime:                  %d\n", AYATime);
 	printf("Send failure probability: %d\n", sendFailureProbability);
-	printf("Starting up Node %d\n", port);
 
+	printf("Starting up Node %d\n", port);
 	printf("N%d {\"N%d\" : %d }\n", port, port, myClock++);
-	printf("Sending to Node 1\n");
-	printf("N%d {\"N%d\" : %d }\n", port, port, myClock++);
+	//printf("Sending to Node 1\n");
+	//printf("N%d {\"N%d\" : %d }\n", port, port, myClock++);
 
 	if (err) {
 		printf("%d conversion error%sencountered, program exiting.\n",
@@ -105,17 +99,16 @@ int main(int argc, char ** argv) {
 		return -1;
 	}
 
-	int j;
 	//Initialize current vector clock
+	int j;
 	for(j=0; j<gsize; j++){
-		myClockVector[j].nodeId=ports[j];
+		myVectorClock[j].nodeId=ports[j];
 		if(ports[j]==port)
-			myClockVector[j].time=myClock;
+			myVectorClock[j].time=myClock;
 		else
-			myClockVector[j].time=-1;
+			myVectorClock[j].time=-1;
 	}
 
-	//printf("My clock size: %d\n",sizeof(myClockVector));
 
 	// Construct the server address structure
 	struct addrinfo addrCriteria; // Criteria for address
@@ -156,7 +149,6 @@ int main(int argc, char ** argv) {
 	memset(recvBuffer, 0, sizeof(recvBuffer));
 	
 
-
 	// Set signal handler for alarm signal
 	struct sigaction handler; // Signal handler
 	handler.sa_handler = CatchAlarm;
@@ -165,7 +157,6 @@ int main(int argc, char ** argv) {
 	handler.sa_flags = 0;
 	if (sigaction(SIGALRM, &handler, 0) < 0)
 		die("sigaction() failed for SIGALRM");
-
 
 	//set the alarm
 	alarm(timeoutValue);
@@ -178,7 +169,7 @@ int main(int argc, char ** argv) {
 			electMsg.electionID= electCount;	
 //			uint32_t hostInt = port;
 //			uint32_t netInt = htonl(hostInt);
-			electMsg.vectorClock[0]= myClockVector[0];
+			electMsg.vectorClock[0]= myVectorClock[0];
 
 			char* sendBuffer= (char*)malloc(maxBufSize);	
 			memcpy(sendBuffer, &electMsg, sizeof(electMsg));

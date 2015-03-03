@@ -15,11 +15,11 @@
 
 const int MAXLENGTH=256;
 int gsize;
-char hosts[9][32];
-char ids[9][8];
+char hosts[MAX_NODES][32];
+char ids[MAX_NODES][8];
 unsigned long ports[9];
 int electCount= 2;
-
+struct clock myClockVector[MAX_NODES];
 //void usage(char * cmd) 
 //void die(char *msg)
 //void dieF(char *msg)
@@ -105,6 +105,18 @@ int main(int argc, char ** argv) {
 		return -1;
 	}
 
+	int j;
+	//Initialize current vector clock
+	for(j=0; j<gsize; j++){
+		myClockVector[j].nodeId=ports[j];
+		if(ports[j]==port)
+			myClockVector[j].time=myClock;
+		else
+			myClockVector[j].time=-1;
+	}
+
+	//printf("My clock size: %d\n",sizeof(myClockVector));
+
 	// Construct the server address structure
 	struct addrinfo addrCriteria; // Criteria for address
 	memset(&addrCriteria, 0, sizeof(addrCriteria)); // Zero out structure
@@ -163,15 +175,15 @@ int main(int argc, char ** argv) {
 			printf("Time out. Call an election.\n");
 			struct msg electMsg;
 			electMsg.msgID= ANSWER;
-			electMsg.electionID= 131;
-			struct clock vectorClock[MAX_NODES];
-			struct clock curClock;
-			curClock.nodeId= port;
-			curClock.time= 1;
-			vectorClock[0]= curClock;
+			electMsg.electionID= electCount;	
+//			uint32_t hostInt = port;
+//			uint32_t netInt = htonl(hostInt);
+			electMsg.vectorClock[0]= myClockVector[0];
+
 			char* sendBuffer= (char*)malloc(maxBufSize);	
 			memcpy(sendBuffer, &electMsg, sizeof(electMsg));
 			int bufSize= strlen(sendBuffer);
+			printf("Sent : msgID-%d, electID-%d, node-N%d, time-%d\n", electMsg.msgID, electMsg.electionID, electMsg.vectorClock[0].nodeId, electMsg.vectorClock[0].time);	
 
 			int i;
 			for(i=0; i<gsize; i++){
@@ -181,10 +193,10 @@ int main(int argc, char ** argv) {
 				int rstVal = getaddrinfo(hosts[i], ids[i], &addrCriteria, &targetAddr);
 				if (rstVal != 0)
 					die("getaddrinfo() failed");
-				ssize_t numBytesSent = sendto(sock, sendBuffer, bufSize, 0, targetAddr->ai_addr, targetAddr->ai_addrlen);
+				ssize_t numBytesSent = sendto(sock, sendBuffer, maxBufSize, 0, targetAddr->ai_addr, targetAddr->ai_addrlen);
 				if (numBytesSent < 0)
 					die("sendto() failed)");
-				else if(numBytesSent != bufSize)
+				else if(numBytesSent != maxBufSize)
 					die("sendto() failed, sent unexpected number of bytes");
 				printf("Msg sent to %s:%d\n", hosts[i], ports[i]);
 			}
@@ -196,6 +208,8 @@ int main(int argc, char ** argv) {
 		PrintSocketAddress((struct sockaddr *) &clntAddr, stdout);
 		struct msg recvMsg;
 		memcpy(&recvMsg, recvBuffer, sizeof(recvMsg));
+//		uint32_t netInt = recvMsg.vectorClock[0].nodeId;
+//		uint32_t hostInt = ntohl(netInt);
 		printf(" : msgID-%d, electID-%d, node-N%d, time-%d\n", recvMsg.msgID, recvMsg.electionID, recvMsg.vectorClock[0].nodeId, recvMsg.vectorClock[0].time);	
 		free(recvBuffer);
 	}

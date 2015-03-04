@@ -13,6 +13,10 @@
 #include "msg.h"
 #include "tools.h"
 
+unsigned long  timeoutValue;
+int sock;
+struct addrinfo addrCriteria; // Criteria for address
+unsigned long  port;
 const int MAXLENGTH=256;
 int gsize;
 char hosts[MAX_NODES][32];
@@ -20,22 +24,42 @@ char ids[MAX_NODES][8];
 unsigned long ports[9];
 unsigned long coord;
 int electCount= 2;
-bool electCalled= false;
+bool electStarted= false;
+bool waitCoord= false;
 struct clock myVectorClock[MAX_NODES];
+
+int callElection();
+int initMsgProcess(char* buffer, struct sockaddr_storage fromAddr);
+int msgProcess(char* buffer, struct sockaddr_storage fromAddr);
+int sendMsg(char host[], char id[], msgType type);
+char* msgTypeString(msgType type);
+int replyMsg(struct sockaddr_storage fromAddr, msgType type);
+int passMsg(struct sockaddr_storage fromAddr, msgType type, unsigned int electId);
 
 // Handler for SIGALRM
 void CatchAlarm(int ignored) {
-	printf("Time out captured.\n");
+	printf("Time out. ");
+	if(waitCoord){
+		electStarted=false;
+		waitCoord=false;
+		callElection();
+	}else if(electStarted){
+		int i;
+		printf("Declare current node N%u to be the coordinator.\n", port);
+		coord= port;
+		for(i=0; i<gsize; i++){
+			if(ports[i]<port)
+				sendMsg(hosts[i], ids[i], COORD);
+		}
+		electStarted=false;
+	}
 }
 
-int msgProcess(char* buffer, struct sockaddr *fromAddr);
 
 int main(int argc, char ** argv) {
 	//parameters
-	unsigned long  port;
 	char *         groupListFileName;
 	char *         logFileName;
-	unsigned long  timeoutValue;
 	unsigned long  AYATime;
 	unsigned long  myClock = 1;
 	unsigned long  sendFailureProbability;
@@ -124,7 +148,7 @@ int main(int argc, char ** argv) {
 		die("getaddrinfo() failed.");
 
 	// Create socket for incoming connections
-	int sock = socket(servAddr->ai_family, servAddr->ai_socktype, servAddr->ai_protocol);
+	sock = socket(servAddr->ai_family, servAddr->ai_socktype, servAddr->ai_protocol);
 	if (sock < 0)
 		die("socket() failed");
 
@@ -141,7 +165,7 @@ int main(int argc, char ** argv) {
 	socklen_t clntAddrLen = sizeof(clntAddr);
 
 	// Block until receive message from a client
-	char buffer[MAXLENGTH]; // I/O buffer
+	//char buffer[MAXLENGTH]; // I/O buffer
 	// Size of received message
 
 	int maxBufSize= sizeof(struct msg)+1;
@@ -163,49 +187,23 @@ int main(int argc, char ** argv) {
 	ssize_t numBytesRcvd = recvfrom(sock, recvBuffer, maxBufSize, 0, (struct sockaddr *) &clntAddr, &clntAddrLen);
 	if (numBytesRcvd < 0){
 		if(errno==EINTR){
-			printf("Time out. Call an election.\n");
-			struct msg electMsg;
-			electMsg.msgID= ELECT;
-			electMsg.electionID= electCount;	
-//			uint32_t hostInt = port;
-//			uint32_t netInt = htonl(hostInt);
-			electMsg.vectorClock[0]= myVectorClock[0];
-
-			char* sendBuffer= (char*)malloc(maxBufSize);	
-			memcpy(sendBuffer, &electMsg, sizeof(electMsg));
-			int bufSize= strlen(sendBuffer);
-			printf("Sent : msgID-%d, electID-%d, node-N%d, time-%d\n", electMsg.msgID, electMsg.electionID, electMsg.vectorClock[0].nodeId, electMsg.vectorClock[0].time);	
-
-			int i;
-			for(i=0; i<gsize; i++){
-				if(ports[i]<=port)
-					continue;
-				struct addrinfo *targetAddr; // List of target addresses
-				int rstVal = getaddrinfo(hosts[i], ids[i], &addrCriteria, &targetAddr);
-				if (rstVal != 0)
-					die("getaddrinfo() failed");
-				ssize_t numBytesSent = sendto(sock, sendBuffer, maxBufSize, 0, targetAddr->ai_addr, targetAddr->ai_addrlen);
-				if (numBytesSent < 0)
-					die("sendto() failed)");
-				else if(numBytesSent != maxBufSize)
-					die("sendto() failed, sent unexpected number of bytes");
-				printf("Msg sent to %s:%d\n", hosts[i], ports[i]);
-			}
+			callElection();
 		}else{
 			die("recvfrom() failed");
 		}
 	}else{
-		msgProcess(recvBuffer, (struct sockaddr *) &clntAddr);
+		initMsgProcess(recvBuffer, clntAddr);
 //		unsigned int fromPort= PrintSocketAddress((struct sockaddr *) &clntAddr, stdout);
 //		struct msg recvMsg;
 //		memcpy(&recvMsg, recvBuffer, sizeof(recvMsg));
 //		uint32_t netInt = recvMsg.vectorClock[0].nodeId;
 //		uint32_t hostInt = ntohl(netInt);
-		free(recvBuffer);
+		
 	}
-	alarm(0);
+	//alarm(0);
+	free(recvBuffer);
 
-
+	sleep(10);
 	// If you want to produce a repeatable sequence of "random" numbers
 	// replace the call time() with an integer.
 	//srandom(time());
@@ -228,9 +226,146 @@ int main(int argc, char ** argv) {
 
 }
 
-int msgProcess(char* buffer, struct sockaddr *fromAddr){
+int callElection(){
+	if(electStarted){
+		printf("There is already an election started. So this will not start a new one.\n");
+		return 0;
+	}
+	printf("N%u call an election.\n", port);
+	electStarted= true;
+	alarm(timeoutValue);
+//			uint32_t hostInt = port;
+//			uint32_t netInt = htonl(hostInt);
+//	electMsg.vectorClock[0]= myVectorClock[0];
+	//int bufSize= strlen(sendBuffer);
+	int i;
+	for(i=0; i<gsize; i++){
+		if(ports[i]>port)
+			sendMsg(hosts[i], ids[i], ELECT);
+	}
+}
+
+int sendMsg(char host[], char id[], msgType type){
+	struct msg Msg;
+	Msg.msgID= type;
+	Msg.electionID= electCount;
+
+	int maxBufSize= sizeof(struct msg)+1;
+	char* sendBuffer= (char*)malloc(maxBufSize);	
+	memcpy(sendBuffer, &Msg, sizeof(Msg));
+
+	struct addrinfo *targetAddr; // List of target addresses
+	int rstVal = getaddrinfo(host, id, &addrCriteria, &targetAddr);
+	if (rstVal != 0)
+		die("getaddrinfo() failed");
+	ssize_t numBytesSent = sendto(sock, sendBuffer, maxBufSize, 0, targetAddr->ai_addr, targetAddr->ai_addrlen);
+	if (numBytesSent < 0)
+		die("sendto() failed)");
+	else if(numBytesSent != maxBufSize)
+		die("sendto() failed, sent unexpected number of bytes");
+	printf("-- Send a msg to %s-%s (N%s). [Type]: %s.\n", host, id, id, msgTypeString(type));
+}
+
+int replyMsg(struct sockaddr_storage fromAddr, msgType type){
+	passMsg(fromAddr, type, electCount);
+}
+
+int passMsg(struct sockaddr_storage fromAddr, msgType type, unsigned int electId){
+	struct msg Msg;
+	Msg.msgID= type;
+	Msg.electionID= electId;
+
+	int maxBufSize= sizeof(struct msg)+1;
+	char* sendBuffer= (char*)malloc(maxBufSize);	
+	memcpy(sendBuffer, &Msg, sizeof(Msg));
+
+	ssize_t numBytesSent = sendto(sock, sendBuffer, maxBufSize, 0, (struct sockaddr *)&fromAddr, sizeof(fromAddr));
+	if (numBytesSent < 0)
+		die("sendto() failed)");
+	else if(numBytesSent != maxBufSize)
+		die("sendto() failed, sent unexpected number of bytes");
+	printf("-- Send a msg to ");
+	unsigned int fromPort= PrintSocketAddress((struct sockaddr *)&fromAddr, stdout);
+	printf(" (N%u). [Type]: %s.\n", fromPort, msgTypeString(type));
+}
+
+char* msgTypeString(msgType type){
+	char* typeString;
+	if(type==ELECT)
+		return "ELECT";
+	else if(type==ANSWER)
+		return "ANSWER";
+	else if(type==COORD)
+		return "COORD";
+	else if(type==AYA)
+		return "AYA";
+	else if(type==IAA)
+		return "IAA";
+	else
+		return "Unknown";
+}
+
+int initMsgProcess(char* buffer, struct sockaddr_storage fromAddr){
+	struct msg recvMsg;
+	memcpy(&recvMsg, buffer, sizeof(recvMsg));
+	msgType type= recvMsg.msgID;
+
+	printf("++ Receive a msg from ");
+	unsigned int fromPort= PrintSocketAddress((struct sockaddr *)&fromAddr, stdout);
+	bool inGroup= false;
+	int i;
+	for(i=0; i<gsize; i++){
+		if(ports[i]==(unsigned long)fromPort){
+			inGroup= true;
+			break;
+		}
+	}
+
+	if(inGroup){
+		printf(" (N%u).\n   ", fromPort);
+		if(type==ELECT){
+			printf("[Type]: ELECT.\t[Action]: answer and forward the election. \n");
+			//answer and forward here
+			//answer
+			callElection();
+			return 1;
+		}else if(type==COORD){
+			printf("[Type]: COORD.\t[Action]: set the coordinator to N%u.\n", fromPort);
+			alarm(0);
+			coord= fromPort;
+			electStarted= false;
+			return 2;
+		}else{
+			printf("[Type]: %s.\t[Action]: drop.\n", msgTypeString(type));
+		}
+	}else{
+		printf(" (not in the group list)\n   Action: Discard.\n");
+	}
+		
+	//if receive a msg but not valid, wait for the next msg and keep counting time
+	struct sockaddr_storage clntAddr;
+	socklen_t clntAddrLen = sizeof(clntAddr);
+	int maxBufSize= sizeof(struct msg)+1;
+	char* recvBuffer= (char*)malloc(maxBufSize);
+	memset(recvBuffer, 0, sizeof(recvBuffer));
+	ssize_t numBytesRcvd = recvfrom(sock, recvBuffer, maxBufSize, 0, (struct sockaddr *) &clntAddr, &clntAddrLen);
+	if (numBytesRcvd < 0){
+		if(errno==EINTR){
+			printf("Time out. Call an election.\n");
+			callElection();
+		}else{
+			die("recvfrom() failed");
+		}
+	}else{
+		initMsgProcess(recvBuffer, clntAddr);
+	}
+	free(recvBuffer);
+	return -1;
+}
+
+int msgProcess(char* buffer, struct sockaddr_storage fromAddr){
 	printf("-- Receive a msg from ");
-	unsigned int fromPort= PrintSocketAddress(fromAddr, stdout);
+	unsigned int fromPort= PrintSocketAddress((struct sockaddr *)&fromAddr, stdout);
 	bool inGroup= false;
 	int i;
 	for(i=0; i<gsize; i++){
@@ -250,12 +385,12 @@ int msgProcess(char* buffer, struct sockaddr *fromAddr){
 	msgType type= recvMsg.msgID;
 	if(type==ELECT){
 		printf("[Type]: ELECT.\t");
-		if(electCalled){
+		if(electStarted){
 			printf("[Action]: answer but not forward. (Already forwarded an election)\n");
 			//answer here
 		}else{
 			printf("[Action]: answer and forward the election. \n");
-			electCalled= true;
+			electStarted= true;
 			//answer and forward here
 		}
 	}else if(type==ANSWER){
@@ -266,7 +401,7 @@ int msgProcess(char* buffer, struct sockaddr *fromAddr){
 		printf("[Type]: COORD.\t[Action]: set the coordinator to N%u.\n", fromPort);
 		alarm(0);
 		coord= fromPort;
-		electCalled= false;
+		electStarted= false;
 	}else if(type==AYA){
 		printf("[Type]: AYA.\t[Action]: answer IAA.\n");
 		//answer IAA

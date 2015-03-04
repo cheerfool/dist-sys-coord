@@ -23,12 +23,12 @@ void dieF(char *msg){
   exit(1);
 }
 
-int readGroup(char *fileName, char hosts[][32], char ids[][8]){
+int readGroup(char *fileName, char hosts[][32], char ids[][8], int maxSize){
   FILE *fp= fopen(fileName, "r");
   if(fp==NULL)
 	die("Can not open the group list file.");
   int i=0;
-  while(!feof(fp)){
+  while(!feof(fp) && i<maxSize){
 	fscanf(fp, "%s %s\n", hosts[i], ids[i]);
 	i++;
   }
@@ -68,10 +68,10 @@ void checkGroup(unsigned long port, unsigned long ports[], int gsize){
 	dieF("Curent node is not in the group list.");
 }
 
-void PrintSocketAddress(const struct sockaddr *address, FILE *stream) {
+unsigned int PrintSocketAddress(const struct sockaddr *address, FILE *stream) {
   // Test for address and stream
   if (address == NULL || stream == NULL)
-    return;
+    return 0;
 
   void *numericAddress; // Pointer to binary address
   // Buffer to contain result (IPv6 sufficient to hold IPv4)
@@ -89,7 +89,7 @@ void PrintSocketAddress(const struct sockaddr *address, FILE *stream) {
     break;
   default:
     fputs("[unknown type]", stream);    // Unhandled type
-    return;
+    return 0;
   }
   // Convert binary to printable address
   if (inet_ntop(address->sa_family, numericAddress, addrBuffer,
@@ -100,4 +100,5 @@ void PrintSocketAddress(const struct sockaddr *address, FILE *stream) {
     if (port != 0)                // Zero not valid in any socket addr
       fprintf(stream, "-%u", port);
   }
+  return port;
 }

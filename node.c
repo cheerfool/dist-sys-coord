@@ -18,13 +18,17 @@ int gsize;
 char hosts[MAX_NODES][32];
 char ids[MAX_NODES][8];
 unsigned long ports[9];
+unsigned long coord;
 int electCount= 2;
+bool electCalled= false;
 struct clock myVectorClock[MAX_NODES];
 
 // Handler for SIGALRM
 void CatchAlarm(int ignored) {
 	printf("Time out captured.\n");
 }
+
+int msgProcess(char* buffer, struct sockaddr *fromAddr);
 
 int main(int argc, char ** argv) {
 	//parameters
@@ -53,7 +57,7 @@ int main(int argc, char ** argv) {
 	logFileName       = argv[3];
 
 	//read and store the group list file and check if current node is in the group list, if not, terminate the program 
-	gsize= readGroup(groupListFileName, hosts, ids);
+	gsize= readGroup(groupListFileName, hosts, ids, MAX_NODES);
 	idToPort(ids, ports, gsize);
 	checkGroup(port, ports, gsize);
 
@@ -101,14 +105,10 @@ int main(int argc, char ** argv) {
 
 	//Initialize current vector clock
 	int j;
-	for(j=0; j<gsize; j++){
-		myVectorClock[j].nodeId=ports[j];
-		if(ports[j]==port)
-			myVectorClock[j].time=myClock;
-		else
-			myVectorClock[j].time=-1;
+	for(j=0; j<MAX_NODES; j++){
+		myVectorClock[j].nodeId= (j<gsize)?ports[j]:0;
+		myVectorClock[j].time= (ports[j]==port)?myClock:0;
 	}
-
 
 	// Construct the server address structure
 	struct addrinfo addrCriteria; // Criteria for address
@@ -165,7 +165,7 @@ int main(int argc, char ** argv) {
 		if(errno==EINTR){
 			printf("Time out. Call an election.\n");
 			struct msg electMsg;
-			electMsg.msgID= ANSWER;
+			electMsg.msgID= ELECT;
 			electMsg.electionID= electCount;	
 //			uint32_t hostInt = port;
 //			uint32_t netInt = htonl(hostInt);
@@ -195,13 +195,12 @@ int main(int argc, char ** argv) {
 			die("recvfrom() failed");
 		}
 	}else{
-		printf("Received msg from ");
-		PrintSocketAddress((struct sockaddr *) &clntAddr, stdout);
-		struct msg recvMsg;
-		memcpy(&recvMsg, recvBuffer, sizeof(recvMsg));
+		msgProcess(recvBuffer, (struct sockaddr *) &clntAddr);
+//		unsigned int fromPort= PrintSocketAddress((struct sockaddr *) &clntAddr, stdout);
+//		struct msg recvMsg;
+//		memcpy(&recvMsg, recvBuffer, sizeof(recvMsg));
 //		uint32_t netInt = recvMsg.vectorClock[0].nodeId;
 //		uint32_t hostInt = ntohl(netInt);
-		printf(" : msgID-%d, electID-%d, node-N%d, time-%d\n", recvMsg.msgID, recvMsg.electionID, recvMsg.vectorClock[0].nodeId, recvMsg.vectorClock[0].time);	
 		free(recvBuffer);
 	}
 	alarm(0);
@@ -228,3 +227,53 @@ int main(int argc, char ** argv) {
 	return 0;
 
 }
+
+int msgProcess(char* buffer, struct sockaddr *fromAddr){
+	printf("-- Receive a msg from ");
+	unsigned int fromPort= PrintSocketAddress(fromAddr, stdout);
+	bool inGroup= false;
+	int i;
+	for(i=0; i<gsize; i++){
+		if(ports[i]==(unsigned long)fromPort){
+			inGroup= true;
+			break;
+		}
+	}
+	if(!inGroup){
+		printf(" (not in the group list)\nAction: Discard.\n");
+		return -1;
+	}
+	printf(" (N%u).\n", fromPort);
+
+	struct msg recvMsg;
+	memcpy(&recvMsg, buffer, sizeof(recvMsg));
+	msgType type= recvMsg.msgID;
+	if(type==ELECT){
+		printf("[Type]: ELECT.\t");
+		if(electCalled){
+			printf("[Action]: answer but not forward. (Already forwarded an election)\n");
+			//answer here
+		}else{
+			printf("[Action]: answer and forward the election. \n");
+			electCalled= true;
+			//answer and forward here
+		}
+	}else if(type==ANSWER){
+		printf("[Type]: ANSWER.\t[Action]: cancel the time out alarm clock and wait for COORD.\n");
+		alarm(0);
+		//wait for coord
+	}else if(type==COORD){
+		printf("[Type]: COORD.\t[Action]: set the coordinator to N%u.\n", fromPort);
+		alarm(0);
+		coord= fromPort;
+		electCalled= false;
+	}else if(type==AYA){
+		printf("[Type]: AYA.\t[Action]: answer IAA.\n");
+		//answer IAA
+	}else if(type==IAA){
+		printf("[Type]: IAA.\t[Action]: cancel the time out alarm clock.\n");
+		alarm(0);
+	}
+	return 1;
+}
+

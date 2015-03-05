@@ -8,6 +8,9 @@
 #include <stdio.h>
 #include <errno.h>
 #include <arpa/inet.h>
+#include "msg.h"
+
+int gsize;
 
 void usage(char *cmd); 
 
@@ -24,5 +27,13 @@ int checkGroup(unsigned long port, unsigned long ports[], int gsize);
 unsigned int PrintSocketAddress(const struct sockaddr *address, FILE *stream);
 
 unsigned int getSocketPort(const struct sockaddr *address);
+
+void copyClock(struct clock newClock[], struct clock ownClock[]);
+
+void updateClock(struct clock ownClock[], struct clock newClock[]);
+
+void logClock(FILE *fp, struct clock myVectorClock[], unsigned long port);
+
+char *msgTypeString(msgType type);
 
 #endif 

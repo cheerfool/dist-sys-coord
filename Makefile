@@ -8,7 +8,7 @@ CFLAGS=-g
 
 NODEOBJS=node.o tools.o 
 
-$(NODEOBJS) : %.o: %.c tools.h
+$(NODEOBJS) : %.o: %.c tools.h msg.h
 	$(CC) -c $<
 
 node: $(NODEOBJS)

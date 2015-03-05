@@ -13,77 +13,51 @@
 #include "msg.h"
 #include "tools.h"
 
+//Settings
 int timeLimit= 15;
-unsigned long  sendFailureProbability;
-unsigned long  timeoutValue;
-int sock;
-struct addrinfo addrCriteria; // Criteria for address
-unsigned long  port;
 const int MAXLENGTH=256;
-int gsize;
-int myIndex;
+//Parameters
+FILE *logfp;
+unsigned long  timeoutValue;
+unsigned long  AYATime;
+unsigned long  sendFailureProbability;
+unsigned long  port;
 char hosts[MAX_NODES][32];
 char ids[MAX_NODES][8];
-unsigned long ports[9];
-unsigned long coord;
-int electCount= 1;
+unsigned long ports[MAX_NODES];
+//Flags
 bool electing= false;
 bool waitCoord= false;
 bool master=false;
+//Variables
+unsigned long coord;
+int electCount= 1;
+int myIndex;
 struct clock myVectorClock[MAX_NODES];
 unsigned int *myClock;
-FILE *logfp;
+int sock;
+struct addrinfo addrCriteria; // Criteria for address
 
+//functions
+void CatchAlarm(int ignored);
+void declareCoord();
 int callElection(unsigned int electId);
-int initMsgProcess(char* buffer, struct sockaddr_storage fromAddr);
-int msgProcess(char* buffer, struct sockaddr_storage fromAddr);
+int receiveMsg(char* buffer, struct sockaddr_storage fromAddr);
+int receiveInitMsg(char* buffer, struct sockaddr_storage fromAddr);
 int sendMsg(char host[], char id[], msgType type);
-char* msgTypeString(msgType type);
+int sendMsgWithId(char host[], char id[], msgType type, unsigned int electId);
 int replyMsg(struct sockaddr_storage fromAddr, msgType type);
-int passMsg(struct sockaddr_storage fromAddr, msgType type, unsigned int electId);
+int replyMsgWithId(struct sockaddr_storage fromAddr, msgType type, unsigned int electId);
 void *checkStatus(unsigned long *threadArgs);
-void updateClock(struct clock ownClock[], struct clock newClock[]);
-void copyClock(struct clock newClock[], struct clock ownClock[]);
-void logClock();
 
-void declareCoord(){
-	int i;
-	printf("[Action]: Declare current node N%u to be the coordinator.\n", port);
-	coord= port;
-	master= true;
-	for(i=0; i<gsize; i++){
-		if(ports[i]<port)
-			sendMsg(hosts[i], ids[i], COORD);
-	}
-	electing=false;
-
-	(*myClock)++;
-	fprintf(logfp, "Declare to be coordinator\n");
-	logClock();
-}
-
-// Handler for SIGALRM
-void CatchAlarm(int ignored) {
-	printf("Time out. ");
-	if(waitCoord){
-		electing=false;
-		waitCoord=false;
-		callElection(electCount++);
-	}else if(electing){
-		declareCoord();
-	}else if(coord>port){
-		callElection(electCount++);
-	}
-}
-
-
+//main
 int main(int argc, char ** argv) {
+    //set seed
 	srandom(510);
+    
 	//parameters
 	char *         groupListFileName;
 	char *         logFileName;
-	unsigned long  AYATime;
-
 	
 	if (argc != 7) {
 		usage(argv[0]);
@@ -143,6 +117,7 @@ int main(int argc, char ** argv) {
 		return -1;
 	}
 
+    //Validate the sendFailureProbability
 	if(sendFailureProbability<0 || sendFailureProbability>100)
 		die("Send failure probability should be an integer between 0-100");
 	electCount+= port*1000;
@@ -155,11 +130,11 @@ int main(int argc, char ** argv) {
 	}
 	myClock= &myVectorClock[myIndex].time;
 
-
+    //Ready to start
 	printf("Starting up Node %d\n", port);
 	printf("N%d {\"N%d\" : %d }\n", port, port, *myClock);
 	fprintf(logfp, "Starting N%d\n", port);
-	logClock();
+    logClock(logfp, myVectorClock, port);
 
 
 	// Construct the server address structure
@@ -212,7 +187,7 @@ int main(int argc, char ** argv) {
 			die("recvfrom() failed");
 		}
 	}else{
-		initMsgProcess(recvBuffer, clntAddr);
+		receiveInitMsg(recvBuffer, clntAddr);
 	}
 
 	// Create thread for periodical status checking
@@ -229,18 +204,46 @@ int main(int argc, char ** argv) {
 			if(errno!=EINTR)
 				die("recvfrom() failed");
 		}else{
-			msgProcess(recvBuffer, clntAddr);
+			receiveMsg(recvBuffer, clntAddr);
 		}
 	}
-	// If you want to produce a repeatable sequence of "random" numbers
-	// replace the call time() with an integer.
-	//srandom(time());
 
 	fclose(logfp);
 	return 0;
-
 }
 
+// Handler for SIGALRM (Time out handling)
+void CatchAlarm(int ignored) {
+    printf("Time out. ");
+    if(waitCoord){
+        electing=false;
+        waitCoord=false;
+        callElection(electCount++);
+    }else if(electing){
+        declareCoord();
+    }else if(coord>port){
+        callElection(electCount++);
+    }
+}
+
+//Declare the current node itself to be the coordinator
+void declareCoord(){
+    int i;
+    printf("[Action]: Declare current node N%u to be the coordinator.\n", port);
+    coord= port;
+    master= true;
+    for(i=0; i<gsize; i++){
+        if(ports[i]<port)
+            sendMsg(hosts[i], ids[i], COORD);
+    }
+    electing=false;
+    
+    (*myClock)++;
+    fprintf(logfp, "Declare to be coordinator\n");
+    logClock(logfp, myVectorClock, port);
+}
+
+//Call an election
 int callElection(unsigned int electId){
 	if(electing){
 		printf("There is already an election started. So this will not start a new one.\n");
@@ -252,18 +255,20 @@ int callElection(unsigned int electId){
 	int i;
 	for(i=0; i<gsize; i++){
 		if(ports[i]>port)
-			forwardMsg(hosts[i], ids[i], ELECT, electId);
+			sendMsgWithId(hosts[i], ids[i], ELECT, electId);
 	}
 }
 
+//Send msg msg via host address and port number with own election ID
 int sendMsg(char host[], char id[], msgType type){
-	forwardMsg(host, id, type, electCount);
+	sendMsgWithId(host, id, type, electCount);
 }
 
-int forwardMsg(char host[], char id[], msgType type, unsigned int electId){
+//Send msg via host address and port number with specified election ID
+int sendMsgWithId(char host[], char id[], msgType type, unsigned int electId){
 	(*myClock)++;
 	fprintf(logfp, "Send %s to N%s\n", msgTypeString(type), id);
-	logClock();
+	logClock(logfp, myVectorClock, port);
 	
 	int luck= random()%100;
 	if(luck< sendFailureProbability){
@@ -275,7 +280,6 @@ int forwardMsg(char host[], char id[], msgType type, unsigned int electId){
 	Msg.msgID= type;
 	Msg.electionID= electId;
 	copyClock(Msg.vectorClock, myVectorClock);
-
 	int maxBufSize= sizeof(struct msg)+1;
 	char* sendBuffer= (char*)malloc(maxBufSize);	
 	memcpy(sendBuffer, &Msg, sizeof(Msg));
@@ -292,15 +296,17 @@ int forwardMsg(char host[], char id[], msgType type, unsigned int electId){
 	printf("-- Send a msg to %s-%s (N%s). [Type]: %s.\n", host, id, id, msgTypeString(type));
 }
 
+//Reply msg via client address with own election ID
 int replyMsg(struct sockaddr_storage fromAddr, msgType type){
-	passMsg(fromAddr, type, electCount);
+	replyMsgWithId(fromAddr, type, electCount);
 }
 
-int passMsg(struct sockaddr_storage fromAddr, msgType type, unsigned int electId){
+//Reply msg via client address with specified election ID
+int replyMsgWithId(struct sockaddr_storage fromAddr, msgType type, unsigned int electId){
 	unsigned int logPort= getSocketPort((struct sockaddr *)&fromAddr);
 	(*myClock)++;
 	fprintf(logfp, "Send %s to N%u\n", msgTypeString(type), logPort);
-	logClock();
+	logClock(logfp, myVectorClock, port);
 
 	int luck= random()%100;
 	if(luck< sendFailureProbability){
@@ -326,23 +332,8 @@ int passMsg(struct sockaddr_storage fromAddr, msgType type, unsigned int electId
 	printf(" (N%u). [Type]: %s.\n", fromPort, msgTypeString(type));
 }
 
-char* msgTypeString(msgType type){
-	char* typeString;
-	if(type==ELECT)
-		return "ELECT";
-	else if(type==ANSWER)
-		return "ANSWER";
-	else if(type==COORD)
-		return "COORD";
-	else if(type==AYA)
-		return "AYA";
-	else if(type==IAA)
-		return "IAA";
-	else
-		return "Unknown";
-}
-
-int initMsgProcess(char* buffer, struct sockaddr_storage fromAddr){
+//Process received msg under initial state
+int receiveInitMsg(char* buffer, struct sockaddr_storage fromAddr){
 	struct msg recvMsg;
 	memcpy(&recvMsg, buffer, sizeof(recvMsg));
 	msgType type= recvMsg.msgID;
@@ -353,7 +344,7 @@ int initMsgProcess(char* buffer, struct sockaddr_storage fromAddr){
 	updateClock(myVectorClock, recvMsg.vectorClock);
 	(*myClock)++;
 	fprintf(logfp, "Receive %s from N%u\n", msgTypeString(type), fromPort);
-	logClock();
+	logClock(logfp, myVectorClock, port);
 
 	bool inGroup= false;
 	int i;
@@ -371,7 +362,7 @@ int initMsgProcess(char* buffer, struct sockaddr_storage fromAddr){
 			//answer and forward here
 			//answer
 			unsigned int electId= recvMsg.electionID;
-			passMsg(fromAddr, ANSWER, electId);
+			replyMsgWithId(fromAddr, ANSWER, electId);
 			callElection(recvMsg.electionID);
 			return 1;
 		}else if(type==COORD){
@@ -404,13 +395,14 @@ int initMsgProcess(char* buffer, struct sockaddr_storage fromAddr){
 			die("Recvfrom() failed");
 		}
 	}else{
-		initMsgProcess(recvBuffer, clntAddr);
+		receiveInitMsg(recvBuffer, clntAddr);
 	}
 	free(recvBuffer);
 	return -1;
 }
 
-int msgProcess(char* buffer, struct sockaddr_storage fromAddr){
+//Process received msg
+int receiveMsg(char* buffer, struct sockaddr_storage fromAddr){
 	printf("++ Receive a msg from ");
 	unsigned int fromPort= PrintSocketAddress((struct sockaddr *)&fromAddr, stdout);
 
@@ -435,16 +427,16 @@ int msgProcess(char* buffer, struct sockaddr_storage fromAddr){
 	updateClock(myVectorClock, recvMsg.vectorClock);
 	(*myClock)++;
 	fprintf(logfp, "Receive %s from N%u\n", msgTypeString(type), fromPort);
-	logClock();
+	logClock(logfp, myVectorClock, port);
 
 	if(type==ELECT){
 		printf("[Type]: ELECT.\t");
 		if(electing){
 			printf("[Action]: Answer but not forward. (Already forwarded an election)\n");
-			passMsg(fromAddr, ANSWER, recvMsg.electionID);
+			replyMsgWithId(fromAddr, ANSWER, recvMsg.electionID);
 		}else{
 			printf("[Action]: Answer and forward the election. \n");
-			passMsg(fromAddr, ANSWER, recvMsg.electionID);
+			replyMsgWithId(fromAddr, ANSWER, recvMsg.electionID);
 			callElection(recvMsg.electionID);
 		}
 	}else if(type==ANSWER){
@@ -478,16 +470,17 @@ int msgProcess(char* buffer, struct sockaddr_storage fromAddr){
 	return 1;
 }
 
+//Periodically check the status of the coordinator
 void *checkStatus(unsigned long *threadArgs){
-  // Guarantees that thread resources are deallocated upon return
   int period= (int) *threadArgs;
   while(*myClock < timeLimit+2){
 	  if(!electing && coord>=port){
 		  if(master){
 			  printf("## Periodical master status checking: I am alive (as a coordinator).\n");
+              alarm(period);
 			  (*myClock)++;
 			  fprintf(logfp, "Coordinator status self-checking\n");
-			  logClock();
+			  logClock(logfp, myVectorClock, port);
 		  }else{
 			  printf("## Periodical master status checking: AYA sent to N%u.\n", coord);
 			  int i;
@@ -509,39 +502,6 @@ void *checkStatus(unsigned long *threadArgs){
   return (NULL);
 }
 
-void logClock(){
-	bool init= true;
-	int i;
-	for(i=0; i<gsize; i++){
-		struct clock curClock= myVectorClock[i];
-		if(curClock.time>0){
-			if(init){
-				fprintf(logfp, "N%d {\"N%d\":%d", port, curClock.nodeId, curClock.time);
-				init= false;
-			}else{
-				fprintf(logfp, ", \"N%d\":%d", curClock.nodeId, curClock.time);
-			}
-		}
-	}
-	fprintf(logfp, "}\n");
-}
 
-void copyClock(struct clock newClock[], struct clock ownClock[]){
-	int i;
-	for(i=0; i<MAX_NODES; i++){
-		newClock[i].nodeId= ownClock[i].nodeId;
-		newClock[i].time= ownClock[i].time;
-	}
-}
-
-void updateClock(struct clock ownClock[], struct clock newClock[]){
-	int i;
-	for(i=0; i<gsize; i++){
-		if(newClock[i].nodeId==ownClock[i].nodeId){
-			if(newClock[i].time> ownClock[i].time)
-				ownClock[i].time= newClock[i].time;
-		}
-	}
-}
 	
 

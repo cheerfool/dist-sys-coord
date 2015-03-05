@@ -6,10 +6,11 @@
 #include <errno.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include "tools.h"
+#include "msg.h"
 
 void usage(char *cmd) {
-  printf("usage: %s  portNum groupFileList logFile timeoutValue averageAYATime failureProbability \n",
-	 cmd);
+  printf("usage: %s  portNum groupFileList logFile timeoutValue averageAYATime failureProbability\n",cmd);
 }
 
 void die(char *msg){
@@ -18,7 +19,7 @@ void die(char *msg){
   exit(1);
 }
 
-void dieF(char *msg){
+void dieByUser(char *msg){
   printf("Error: %s\n", msg);
   exit(1);
 }
@@ -67,8 +68,60 @@ int checkGroup(unsigned long port, unsigned long ports[], int gsize){
 	}
   }
   if(!in)  
-	dieF("Curent node is not in the group list.");
+	dieByUser("Curent node is not in the group list.");
   return -1;
+}
+
+void copyClock(struct clock newClock[], struct clock ownClock[]){
+    int i;
+    for(i=0; i<MAX_NODES; i++){
+        newClock[i].nodeId= ownClock[i].nodeId;
+        newClock[i].time= ownClock[i].time;
+    }
+}
+
+void updateClock(struct clock ownClock[], struct clock newClock[]){
+    int i;
+    for(i=0; i<gsize; i++){
+        if(newClock[i].nodeId==ownClock[i].nodeId){
+            if(newClock[i].time> ownClock[i].time)
+                ownClock[i].time= newClock[i].time;
+        }
+    }
+}
+
+void logClock(FILE *fp, struct clock myVectorClock[], unsigned long port){
+    bool init= true;
+    int i;
+    for(i=0; i<gsize; i++){
+        struct clock curClock= myVectorClock[i];
+        if(curClock.time>0){
+            if(init){
+                fprintf(fp, "N%d {\"N%d\":%d", port, curClock.nodeId, curClock.time);
+                init= false;
+            }else{
+                fprintf(fp, ", \"N%d\":%d", curClock.nodeId, curClock.time);
+            }
+        }
+    }
+    fprintf(fp, "}\n");
+}
+
+//Convert msg type from ENUM to curresponding string
+char* msgTypeString(msgType type){
+    char* typeString;
+    if(type==ELECT)
+        return "ELECT";
+    else if(type==ANSWER)
+        return "ANSWER";
+    else if(type==COORD)
+        return "COORD";
+    else if(type==AYA)
+        return "AYA";
+    else if(type==IAA)
+        return "IAA";
+    else
+        return "Unknown";
 }
 
 unsigned int PrintSocketAddress(const struct sockaddr *address, FILE *stream) {

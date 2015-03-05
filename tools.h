@@ -19,8 +19,10 @@ int readGroup(char *fileName, char hosts[][32], char ids[][8], int maxSize);
 
 void idToPort(char ids[][8], unsigned long ports[], int gsize);
 
-void checkGroup(unsigned long port, unsigned long ports[], int gsize);
+int checkGroup(unsigned long port, unsigned long ports[], int gsize);
 
 unsigned int PrintSocketAddress(const struct sockaddr *address, FILE *stream);
+
+unsigned int getSocketPort(const struct sockaddr *address);
 
 #endif 

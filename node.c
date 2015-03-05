@@ -13,6 +13,7 @@
 #include "msg.h"
 #include "tools.h"
 
+int timeLimit= 10;
 unsigned long  sendFailureProbability;
 unsigned long  timeoutValue;
 int sock;
@@ -20,15 +21,18 @@ struct addrinfo addrCriteria; // Criteria for address
 unsigned long  port;
 const int MAXLENGTH=256;
 int gsize;
+int myIndex;
 char hosts[MAX_NODES][32];
 char ids[MAX_NODES][8];
 unsigned long ports[9];
 unsigned long coord;
-int electCount= 2;
+int electCount= 1;
 bool electing= false;
 bool waitCoord= false;
 bool master=false;
 struct clock myVectorClock[MAX_NODES];
+unsigned int *myClock;
+FILE *logfp;
 
 int callElection(unsigned int electId);
 int initMsgProcess(char* buffer, struct sockaddr_storage fromAddr);
@@ -38,6 +42,9 @@ char* msgTypeString(msgType type);
 int replyMsg(struct sockaddr_storage fromAddr, msgType type);
 int passMsg(struct sockaddr_storage fromAddr, msgType type, unsigned int electId);
 void *checkStatus(unsigned long *threadArgs);
+void updateClock(struct clock ownClock[], struct clock newClock[]);
+void copyClock(struct clock newClock[], struct clock ownClock[]);
+void logClock();
 
 void declareCoord(){
 	int i;
@@ -49,6 +56,10 @@ void declareCoord(){
 			sendMsg(hosts[i], ids[i], COORD);
 	}
 	electing=false;
+
+	(*myClock)++;
+	fprintf(logfp, "Declare to be coordinator\n");
+	logClock();
 }
 
 // Handler for SIGALRM
@@ -72,7 +83,7 @@ int main(int argc, char ** argv) {
 	char *         groupListFileName;
 	char *         logFileName;
 	unsigned long  AYATime;
-	unsigned long  myClock = 1;
+
 	
 	if (argc != 7) {
 		usage(argv[0]);
@@ -94,13 +105,12 @@ int main(int argc, char ** argv) {
 	//read and store the group list file and check if current node is in the group list, if not, terminate the program 
 	gsize= readGroup(groupListFileName, hosts, ids, MAX_NODES);
 	idToPort(ids, ports, gsize);
-	checkGroup(port, ports, gsize);
+	myIndex= checkGroup(port, ports, gsize);
 
 	//open the file to write logs
-	FILE *logf= fopen(logFileName, "w+");
-	if(logf==NULL)
+	logfp= fopen(logFileName, "w+");
+	if(logfp==NULL)
 		die("Can not write to the log file.");
-	fprintf(logf, "starting N%lu\n", port);
 
 	timeoutValue      = strtoul(argv[4], &end, 10);
 	if (argv[4] == end) {
@@ -127,9 +137,6 @@ int main(int argc, char ** argv) {
 	printf("AYATime:                  %d\n", AYATime);
 	printf("Send failure probability: %d\n", sendFailureProbability);
 
-	printf("Starting up Node %d\n", port);
-	printf("N%d {\"N%d\" : %d }\n", port, port, myClock++);
-
 	if (err) {
 		printf("%d conversion error%sencountered, program exiting.\n",
 			err, err>1? "s were ": " was ");
@@ -138,13 +145,22 @@ int main(int argc, char ** argv) {
 
 	if(sendFailureProbability<0 || sendFailureProbability>100)
 		die("Send failure probability should be an integer between 0-100");
+	electCount+= port*1000;
 
 	//Initialize current vector clock
 	int j;
 	for(j=0; j<MAX_NODES; j++){
 		myVectorClock[j].nodeId= (j<gsize)?ports[j]:0;
-		myVectorClock[j].time= (ports[j]==port)?myClock:0;
+		myVectorClock[j].time= (ports[j]==port)?1:0;
 	}
+	myClock= &myVectorClock[myIndex].time;
+
+
+	printf("Starting up Node %d\n", port);
+	printf("N%d {\"N%d\" : %d }\n", port, port, (*myClock)++);
+	fprintf(logfp, "Starting N%d\n", port);
+	logClock();
+
 
 	// Construct the server address structure
 	struct addrinfo addrCriteria; // Criteria for address
@@ -207,7 +223,7 @@ int main(int argc, char ** argv) {
 	printf("** Thread %ld created for periodical status checking.\n", (long int) threadID);
 
 	//keep listensing and receiving msgs
-	while(true){
+	while(electing || *myClock < timeLimit){
 		numBytesRcvd = recvfrom(sock, recvBuffer, maxBufSize, 0, (struct sockaddr *) &clntAddr, &clntAddrLen);
 		if (numBytesRcvd < 0){
 			if(errno!=EINTR)
@@ -216,13 +232,11 @@ int main(int argc, char ** argv) {
 			msgProcess(recvBuffer, clntAddr);
 		}
 	}
-
-
 	// If you want to produce a repeatable sequence of "random" numbers
 	// replace the call time() with an integer.
 	//srandom(time());
 
-	fclose(logf);
+	fclose(logfp);
 	return 0;
 
 }
@@ -247,6 +261,10 @@ int sendMsg(char host[], char id[], msgType type){
 }
 
 int forwardMsg(char host[], char id[], msgType type, unsigned int electId){
+	(*myClock)++;
+	fprintf(logfp, "Send %s to N%s\n", msgTypeString(type), id);
+	logClock();
+	
 	int luck= random()%100;
 	if(luck< sendFailureProbability){
 		printf("send() failed. Random number %d < %d (send failure probability).\n", luck, sendFailureProbability);
@@ -256,6 +274,7 @@ int forwardMsg(char host[], char id[], msgType type, unsigned int electId){
 	struct msg Msg;
 	Msg.msgID= type;
 	Msg.electionID= electId;
+	copyClock(Msg.vectorClock, myVectorClock);
 
 	int maxBufSize= sizeof(struct msg)+1;
 	char* sendBuffer= (char*)malloc(maxBufSize);	
@@ -278,6 +297,11 @@ int replyMsg(struct sockaddr_storage fromAddr, msgType type){
 }
 
 int passMsg(struct sockaddr_storage fromAddr, msgType type, unsigned int electId){
+	unsigned int logPort= getSocketPort((struct sockaddr *)&fromAddr);
+	(*myClock)++;
+	fprintf(logfp, "Send %s to N%u\n", msgTypeString(type), logPort);
+	logClock();
+
 	int luck= random()%100;
 	if(luck< sendFailureProbability){
 		printf("send() failed. Random number %d < %d (send failure probability).\n", luck, sendFailureProbability);
@@ -286,6 +310,7 @@ int passMsg(struct sockaddr_storage fromAddr, msgType type, unsigned int electId
 	struct msg Msg;
 	Msg.msgID= type;
 	Msg.electionID= electId;
+	copyClock(Msg.vectorClock, myVectorClock);
 
 	int maxBufSize= sizeof(struct msg)+1;
 	char* sendBuffer= (char*)malloc(maxBufSize);	
@@ -324,6 +349,11 @@ int initMsgProcess(char* buffer, struct sockaddr_storage fromAddr){
 
 	printf("++ Receive a msg from ");
 	unsigned int fromPort= PrintSocketAddress((struct sockaddr *)&fromAddr, stdout);
+
+	updateClock(myVectorClock, recvMsg.vectorClock);
+	fprintf(logfp, "Receive %s from N%u\n", msgTypeString(type), fromPort);
+	logClock();
+
 	bool inGroup= false;
 	int i;
 	for(i=0; i<gsize; i++){
@@ -382,6 +412,7 @@ int initMsgProcess(char* buffer, struct sockaddr_storage fromAddr){
 int msgProcess(char* buffer, struct sockaddr_storage fromAddr){
 	printf("++ Receive a msg from ");
 	unsigned int fromPort= PrintSocketAddress((struct sockaddr *)&fromAddr, stdout);
+
 	bool inGroup= false;
 	int i;
 	for(i=0; i<gsize; i++){
@@ -399,6 +430,10 @@ int msgProcess(char* buffer, struct sockaddr_storage fromAddr){
 	struct msg recvMsg;
 	memcpy(&recvMsg, buffer, sizeof(recvMsg));
 	msgType type= recvMsg.msgID;
+
+	updateClock(myVectorClock, recvMsg.vectorClock);
+	fprintf(logfp, "Receive %s from N%u\n", msgTypeString(type), fromPort);
+	logClock();
 
 	if(type==ELECT){
 		printf("[Type]: ELECT.\t");
@@ -444,10 +479,13 @@ int msgProcess(char* buffer, struct sockaddr_storage fromAddr){
 void *checkStatus(unsigned long *threadArgs){
   // Guarantees that thread resources are deallocated upon return
   int period= (int) *threadArgs;
-  while(true){
+  while(*myClock < timeLimit+2){
 	  if(!electing && coord>=port){
 		  if(master){
 			  printf("## Periodical master status checking: I am alive (as a coordinator).\n");
+			  (*myClock)++;
+			  fprintf(logfp, "Coordinator status self-checking\n");
+			  logClock();
 		  }else{
 			  printf("## Periodical master status checking: AYA sent to N%u.\n", coord);
 			  int i;
@@ -468,4 +506,40 @@ void *checkStatus(unsigned long *threadArgs){
   }
   return (NULL);
 }
+
+void logClock(){
+	bool init= true;
+	int i;
+	for(i=0; i<gsize; i++){
+		struct clock curClock= myVectorClock[i];
+		if(curClock.time>0){
+			if(init){
+				fprintf(logfp, "N%d {\"N%d\":%d", port, curClock.nodeId, curClock.time);
+				init= false;
+			}else{
+				fprintf(logfp, ", \"N%d\":%d", curClock.nodeId, curClock.time);
+			}
+		}
+	}
+	fprintf(logfp, "}\n");
+}
+
+void copyClock(struct clock newClock[], struct clock ownClock[]){
+	int i;
+	for(i=0; i<MAX_NODES; i++){
+		newClock[i].nodeId= ownClock[i].nodeId;
+		newClock[i].time= ownClock[i].time;
+	}
+}
+
+void updateClock(struct clock ownClock[], struct clock newClock[]){
+	int i;
+	for(i=0; i<gsize; i++){
+		if(newClock[i].nodeId==ownClock[i].nodeId){
+			if(newClock[i].time> ownClock[i].time)
+				ownClock[i].time= newClock[i].time;
+		}
+	}
+}
+	
 

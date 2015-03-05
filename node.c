@@ -208,7 +208,9 @@ int main(int argc, char ** argv) {
 		}
 	}
 
+	fprintf(logfp, "\n");
 	fclose(logfp);
+	printf("Clock reaches the time limit, program finishes successfully.\n");
 	return 0;
 }
 
@@ -228,6 +230,10 @@ void CatchAlarm(int ignored) {
 
 //Declare the current node itself to be the coordinator
 void declareCoord(){
+	(*myClock)++;
+    fprintf(logfp, "Declare to be coordinator\n");
+    logClock(logfp, myVectorClock, port);
+
     int i;
     printf("[Action]: Declare current node N%u to be the coordinator.\n", port);
     coord= port;
@@ -237,10 +243,6 @@ void declareCoord(){
             sendMsg(hosts[i], ids[i], COORD);
     }
     electing=false;
-    
-    (*myClock)++;
-    fprintf(logfp, "Declare to be coordinator\n");
-    logClock(logfp, myVectorClock, port);
 }
 
 //Call an election
@@ -303,9 +305,9 @@ int replyMsg(struct sockaddr_storage fromAddr, msgType type){
 
 //Reply msg via client address with specified election ID
 int replyMsgWithId(struct sockaddr_storage fromAddr, msgType type, unsigned int electId){
-	unsigned int logPort= getSocketPort((struct sockaddr *)&fromAddr);
+	unsigned int fromPort= getSocketPort((struct sockaddr *)&fromAddr, false);
 	(*myClock)++;
-	fprintf(logfp, "Send %s to N%u\n", msgTypeString(type), logPort);
+	fprintf(logfp, "Send %s to N%u\n", msgTypeString(type), fromPort);
 	logClock(logfp, myVectorClock, port);
 
 	int luck= random()%100;
@@ -328,7 +330,7 @@ int replyMsgWithId(struct sockaddr_storage fromAddr, msgType type, unsigned int 
 	else if(numBytesSent != maxBufSize)
 		die("sendto() failed, sent unexpected number of bytes");
 	printf("-- Send a msg to ");
-	unsigned int fromPort= PrintSocketAddress((struct sockaddr *)&fromAddr, stdout);
+	resolveSocketAddress((struct sockaddr *)&fromAddr, stdout, true);
 	printf(" (N%u). [Type]: %s.\n", fromPort, msgTypeString(type));
 }
 
@@ -339,7 +341,7 @@ int receiveInitMsg(char* buffer, struct sockaddr_storage fromAddr){
 	msgType type= recvMsg.msgID;
 
 	printf("++ Receive a msg from ");
-	unsigned int fromPort= PrintSocketAddress((struct sockaddr *)&fromAddr, stdout);
+	unsigned int fromPort= resolveSocketAddress((struct sockaddr *)&fromAddr, stdout, true);
 
 	updateClock(myVectorClock, recvMsg.vectorClock);
 	(*myClock)++;
@@ -404,7 +406,7 @@ int receiveInitMsg(char* buffer, struct sockaddr_storage fromAddr){
 //Process received msg
 int receiveMsg(char* buffer, struct sockaddr_storage fromAddr){
 	printf("++ Receive a msg from ");
-	unsigned int fromPort= PrintSocketAddress((struct sockaddr *)&fromAddr, stdout);
+	unsigned int fromPort= resolveSocketAddress((struct sockaddr *)&fromAddr, stdout, true);
 
 	bool inGroup= false;
 	int i;

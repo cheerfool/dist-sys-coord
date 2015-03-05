@@ -13,6 +13,7 @@
 #include "msg.h"
 #include "tools.h"
 
+unsigned long  sendFailureProbability;
 unsigned long  timeoutValue;
 int sock;
 struct addrinfo addrCriteria; // Criteria for address
@@ -36,6 +37,7 @@ int sendMsg(char host[], char id[], msgType type);
 char* msgTypeString(msgType type);
 int replyMsg(struct sockaddr_storage fromAddr, msgType type);
 int passMsg(struct sockaddr_storage fromAddr, msgType type, unsigned int electId);
+void *checkStatus(unsigned long *threadArgs);
 
 void declareCoord(){
 	int i;
@@ -58,17 +60,20 @@ void CatchAlarm(int ignored) {
 		callElection(electCount++);
 	}else if(electing){
 		declareCoord();
+	}else if(coord>port){
+		callElection(electCount++);
 	}
 }
 
 
 int main(int argc, char ** argv) {
+	srandom(510);
 	//parameters
 	char *         groupListFileName;
 	char *         logFileName;
 	unsigned long  AYATime;
 	unsigned long  myClock = 1;
-	unsigned long  sendFailureProbability;
+	
 	if (argc != 7) {
 		usage(argv[0]);
 		return -1;
@@ -131,6 +136,9 @@ int main(int argc, char ** argv) {
 		return -1;
 	}
 
+	if(sendFailureProbability<0 || sendFailureProbability>100)
+		die("Send failure probability should be an integer between 0-100");
+
 	//Initialize current vector clock
 	int j;
 	for(j=0; j<MAX_NODES; j++){
@@ -191,6 +199,13 @@ int main(int argc, char ** argv) {
 		initMsgProcess(recvBuffer, clntAddr);
 	}
 
+	// Create thread for periodical status checking
+	pthread_t threadID;
+	int returnValue = pthread_create(&threadID, NULL, checkStatus, &AYATime);
+	if (returnValue != 0)
+		die("pthread_create() failed");
+	printf("** Thread %ld created for periodical status checking.\n", (long int) threadID);
+
 	//keep listensing and receiving msgs
 	while(true){
 		numBytesRcvd = recvfrom(sock, recvBuffer, maxBufSize, 0, (struct sockaddr *) &clntAddr, &clntAddrLen);
@@ -206,19 +221,6 @@ int main(int argc, char ** argv) {
 	// If you want to produce a repeatable sequence of "random" numbers
 	// replace the call time() with an integer.
 	//srandom(time());
-	srandom(510);
-
-	int i;
-	for (i = 0; i < 0; i++) {
-		int rn;
-		rn = random(); 
-
-		// scale to number between 0 and the 2*AYA time so that 
-		// the average value for the timeout is AYA time.
-
-		int sc = rn % (2*AYATime);
-		printf("Random number %d is: %d\n", i, sc);
-	}
 
 	fclose(logf);
 	return 0;
@@ -245,6 +247,12 @@ int sendMsg(char host[], char id[], msgType type){
 }
 
 int forwardMsg(char host[], char id[], msgType type, unsigned int electId){
+	int luck= random()%100;
+	if(luck< sendFailureProbability){
+		printf("send() failed. Random number %d < %d (send failure probability).\n", luck, sendFailureProbability);
+		return -1;
+	}
+
 	struct msg Msg;
 	Msg.msgID= type;
 	Msg.electionID= electId;
@@ -270,6 +278,11 @@ int replyMsg(struct sockaddr_storage fromAddr, msgType type){
 }
 
 int passMsg(struct sockaddr_storage fromAddr, msgType type, unsigned int electId){
+	int luck= random()%100;
+	if(luck< sendFailureProbability){
+		printf("send() failed. Random number %d < %d (send failure probability).\n", luck, sendFailureProbability);
+		return -1;
+	}
 	struct msg Msg;
 	Msg.msgID= type;
 	Msg.electionID= electId;
@@ -395,7 +408,7 @@ int msgProcess(char* buffer, struct sockaddr_storage fromAddr){
 		}else{
 			printf("[Action]: Answer and forward the election. \n");
 			passMsg(fromAddr, ANSWER, recvMsg.electionID);
-			//answer and forward here
+			callElection(recvMsg.electionID);
 		}
 	}else if(type==ANSWER){
 		printf("[Type]: ANSWER.\t");
@@ -426,5 +439,33 @@ int msgProcess(char* buffer, struct sockaddr_storage fromAddr){
 		}	
 	}
 	return 1;
+}
+
+void *checkStatus(unsigned long *threadArgs){
+  // Guarantees that thread resources are deallocated upon return
+  int period= (int) *threadArgs;
+  while(true){
+	  if(!electing && coord>=port){
+		  if(master){
+			  printf("## Periodical master status checking: I am alive (as a coordinator).\n");
+		  }else{
+			  printf("## Periodical master status checking: AYA sent to N%u.\n", coord);
+			  int i;
+			  char *host;
+			  char *id;
+			  for(i=0; i<gsize; i++){
+				  if(ports[i]==coord){
+					  host= hosts[i];
+					  id=ids[i];
+					  break;
+				  }
+			  }
+			  alarm(period);
+			  sendMsg(host, id, AYA);
+		  }
+	  }
+	  sleep(period);
+  }
+  return (NULL);
 }
 

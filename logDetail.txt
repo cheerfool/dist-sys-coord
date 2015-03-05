@@ -1,0 +1,206 @@
+jiangkl@selkirk:hw2$ ./node 5510 group.txt log5510.txt 10 7 80
+Group member list: 
+1: N5510 - 127.0.0.1
+2: N5511 - 127.0.0.1
+3: N5512 - 127.0.0.1
+4: N5513 - 127.0.0.1
+Port number:              5510
+Group list file name:     group.txt
+Log file name:            log5510.txt
+Timeout value:            10
+AYATime:                  7
+Send failure probability: 80
+Starting up Node 5510
+N5510 {"N5510" : 1 }
+Time out. N5510 call an election.
+-- Send a msg to 127.0.0.1-5511 (N5511). [Type]: ELECT.
+send() failed. Random number 1 < 80 (send failure probability).
+send() failed. Random number 15 < 80 (send failure probability).
+** Thread 139868436985600 created for periodical status checking.
+++ Receive a msg from 127.0.0.1-5513 (N5513).
+   [Type]: COORD.	[Action]: Set the coordinator to N5513.
+## Periodical master status checking: AYA sent to N5513.
+-- Send a msg to 127.0.0.1-5513 (N5513). [Type]: AYA.
+++ Receive a msg from 127.0.0.1-5513 (N5513).
+   [Type]: IAA.	[Action]: Cancel the time out alarm clock.
+## Periodical master status checking: AYA sent to N5513.
+send() failed. Random number 8 < 80 (send failure probability).
+Time out. N5510 call an election.
+send() failed. Random number 51 < 80 (send failure probability).
+-- Send a msg to 127.0.0.1-5512 (N5512). [Type]: ELECT.
+send() failed. Random number 52 < 80 (send failure probability).
+++ Receive a msg from 127.0.0.1-5512 (N5512).
+   [Type]: ANSWER.	[Action]: Reset the alarm to start waiting for COORD.
+++ Receive a msg from 127.0.0.1-5512 (N5512).
+   [Type]: COORD.	[Action]: Set the coordinator to N5512.
+## Periodical master status checking: AYA sent to N5512.
+send() failed. Random number 9 < 80 (send failure probability).
+Time out. N5510 call an election.
+send() failed. Random number 24 < 80 (send failure probability).
+send() failed. Random number 28 < 80 (send failure probability).
+-- Send a msg to 127.0.0.1-5513 (N5513). [Type]: ELECT.
+Time out. [Action]: Declare current node N5510 to be the coordinator.
+
+jiangkl@selkirk:hw2$ ./node 5511 "group.txt" "log5511.txt" 5 10 50
+Group member list: 
+1: N5510 - 127.0.0.1
+2: N5511 - 127.0.0.1
+3: N5512 - 127.0.0.1
+4: N5513 - 127.0.0.1
+Port number:              5511
+Group list file name:     group.txt
+Log file name:            log5511.txt
+Timeout value:            5
+AYATime:                  10
+Send failure probability: 50
+Starting up Node 5511
+N5511 {"N5511" : 1 }
+Time out. N5511 call an election.
+-- Send a msg to 127.0.0.1-5512 (N5512). [Type]: ELECT.
+send() failed. Random number 1 < 50 (send failure probability).
+** Thread 139987115169536 created for periodical status checking.
+++ Receive a msg from 127.0.0.1-5512 (N5512).
+   [Type]: ANSWER.	[Action]: Reset the alarm to start waiting for COORD.
+++ Receive a msg from 127.0.0.1-5510 (N5510).
+   [Type]: ELECT.	[Action]: Answer but not forward. (Already forwarded an election)
+send() failed. Random number 15 < 50 (send failure probability).
+++ Receive a msg from 127.0.0.1-5513 (N5513).
+   [Type]: COORD.	[Action]: Set the coordinator to N5513.
+## Periodical master status checking: AYA sent to N5513.
+-- Send a msg to 127.0.0.1-5513 (N5513). [Type]: AYA.
+++ Receive a msg from 127.0.0.1-5513 (N5513).
+   [Type]: IAA.	[Action]: Cancel the time out alarm clock.
+## Periodical master status checking: AYA sent to N5513.
+send() failed. Random number 8 < 50 (send failure probability).
+Time out. N5511 call an election.
+-- Send a msg to 127.0.0.1-5512 (N5512). [Type]: ELECT.
+-- Send a msg to 127.0.0.1-5513 (N5513). [Type]: ELECT.
+++ Receive a msg from 127.0.0.1-5512 (N5512).
+   [Type]: ANSWER.	[Action]: Reset the alarm to start waiting for COORD.
+++ Receive a msg from 127.0.0.1-5512 (N5512).
+   [Type]: COORD.	[Action]: Set the coordinator to N5512.
+## Periodical master status checking: AYA sent to N5512.
+-- Send a msg to 127.0.0.1-5512 (N5512). [Type]: AYA.
+Time out. N5511 call an election.
+send() failed. Random number 9 < 50 (send failure probability).
+send() failed. Random number 24 < 50 (send failure probability).
+Time out. [Action]: Declare current node N5511 to be the coordinator.
+send() failed. Random number 28 < 50 (send failure probability).
+
+jiangkl@selkirk:hw2$ ./node 5512 group.txt log5512.txt 10 10 0
+Group member list: 
+1: N5510 - 127.0.0.1
+2: N5511 - 127.0.0.1
+3: N5512 - 127.0.0.1
+4: N5513 - 127.0.0.1
+Port number:              5512
+Group list file name:     group.txt
+Log file name:            log5512.txt
+Timeout value:            10
+AYATime:                  10
+Send failure probability: 0
+Starting up Node 5512
+N5512 {"N5512" : 1 }
+++ Receive a msg from 127.0.0.1-5511 (N5511).
+   [Type]: ELECT.	[Action]: Answer and forward the election. 
+-- Send a msg to 127.0.0.1-5511 (N5511). [Type]: ANSWER.
+N5512 call an election.
+-- Send a msg to 127.0.0.1-5513 (N5513). [Type]: ELECT.
+** Thread 140638858176256 created for periodical status checking.
+++ Receive a msg from 127.0.0.1-5513 (N5513).
+   [Type]: ANSWER.	[Action]: Reset the alarm to start waiting for COORD.
+++ Receive a msg from 127.0.0.1-5513 (N5513).
+   [Type]: COORD.	[Action]: Set the coordinator to N5513.
+## Periodical master status checking: AYA sent to N5513.
+-- Send a msg to 127.0.0.1-5513 (N5513). [Type]: AYA.
+++ Receive a msg from 127.0.0.1-5513 (N5513).
+   [Type]: IAA.	[Action]: Cancel the time out alarm clock.
+## Periodical master status checking: AYA sent to N5513.
+-- Send a msg to 127.0.0.1-5513 (N5513). [Type]: AYA.
+++ Receive a msg from 127.0.0.1-5513 (N5513).
+   [Type]: IAA.	[Action]: Cancel the time out alarm clock.
+++ Receive a msg from 127.0.0.1-5510 (N5510).
+   [Type]: ELECT.	[Action]: Answer and forward the election. 
+-- Send a msg to 127.0.0.1-5510 (N5510). [Type]: ANSWER.
+N5512 call an election.
+-- Send a msg to 127.0.0.1-5513 (N5513). [Type]: ELECT.
+++ Receive a msg from 127.0.0.1-5511 (N5511).
+   [Type]: ELECT.	[Action]: Answer but not forward. (Already forwarded an election)
+-- Send a msg to 127.0.0.1-5511 (N5511). [Type]: ANSWER.
+Time out. [Action]: Declare current node N5512 to be the coordinator.
+-- Send a msg to 127.0.0.1-5510 (N5510). [Type]: COORD.
+-- Send a msg to 127.0.0.1-5511 (N5511). [Type]: COORD.
+
+jiangkl@selkirk:hw2$ ./node 5513 "group.txt" "log5513.txt" 7 20 0
+Group member list: 
+1: N5510 - 127.0.0.1
+2: N5511 - 127.0.0.1
+3: N5512 - 127.0.0.1
+4: N5513 - 127.0.0.1
+Port number:              5513
+Group list file name:     group.txt
+Log file name:            log5513.txt
+Timeout value:            7
+AYATime:                  20
+Send failure probability: 0
+Starting up Node 5513
+N5513 {"N5513" : 1 }
+++ Receive a msg from 127.0.0.1-5512 (N5512).
+   [Type]: ELECT.	[Action]: Answer and forward the election. 
+-- Send a msg to 127.0.0.1-5512 (N5512). [Type]: ANSWER.
+N5513 call an election.
+** Thread 140277781481216 created for periodical status checking.
+Time out. [Action]: Declare current node N5513 to be the coordinator.
+-- Send a msg to 127.0.0.1-5510 (N5510). [Type]: COORD.
+-- Send a msg to 127.0.0.1-5511 (N5511). [Type]: COORD.
+-- Send a msg to 127.0.0.1-5512 (N5512). [Type]: COORD.
+++ Receive a msg from 127.0.0.1-5510 (N5510).
+   [Type]: AYA.	[Action]: Answer IAA.
+-- Send a msg to 127.0.0.1-5510 (N5510). [Type]: IAA.
+++ Receive a msg from 127.0.0.1-5512 (N5512).
+   [Type]: AYA.	[Action]: Answer IAA.
+-- Send a msg to 127.0.0.1-5512 (N5512). [Type]: IAA.
+++ Receive a msg from 127.0.0.1-5512 (N5512).
+   [Type]: ELECT.	[Action]: Answer and forward the election. 
+-- Send a msg to 127.0.0.1-5512 (N5512). [Type]: ANSWER.
+N5513 call an election.
+Time out. [Action]: Declare current node N5513 to be the coordinator.
+-- Send a msg to 127.0.0.1-5510 (N5510). [Type]: COORD.
+-- Send a msg to 127.0.0.1-5511 (N5511). [Type]: COORD.
+-- Send a msg to 127.0.0.1-5512 (N5512). [Type]: COORD.
+jiangkl@selkirk:hw2$ ./node 5513 "group.txt" "log5513.txt" 7 20 0
+Group member list: 
+1: N5510 - 127.0.0.1
+2: N5511 - 127.0.0.1
+3: N5512 - 127.0.0.1
+4: N5513 - 127.0.0.1
+Port number:              5513
+Group list file name:     group.txt
+Log file name:            log5513.txt
+Timeout value:            7
+AYATime:                  20
+Send failure probability: 0
+Starting up Node 5513
+N5513 {"N5513" : 1 }
+++ Receive a msg from 127.0.0.1-5512 (N5512).
+   [Type]: ELECT.	[Action]: Answer and forward the election. 
+-- Send a msg to 127.0.0.1-5512 (N5512). [Type]: ANSWER.
+N5513 call an election.
+** Thread 140135186441984 created for periodical status checking.
+Time out. [Action]: Declare current node N5513 to be the coordinator.
+-- Send a msg to 127.0.0.1-5510 (N5510). [Type]: COORD.
+-- Send a msg to 127.0.0.1-5511 (N5511). [Type]: COORD.
+-- Send a msg to 127.0.0.1-5512 (N5512). [Type]: COORD.
+++ Receive a msg from 127.0.0.1-5511 (N5511).
+   [Type]: AYA.	[Action]: Answer IAA.
+-- Send a msg to 127.0.0.1-5511 (N5511). [Type]: IAA.
+++ Receive a msg from 127.0.0.1-5512 (N5512).
+   [Type]: AYA.	[Action]: Answer IAA.
+-- Send a msg to 127.0.0.1-5512 (N5512). [Type]: IAA.
+++ Receive a msg from 127.0.0.1-5510 (N5510).
+   [Type]: AYA.	[Action]: Answer IAA.
+-- Send a msg to 127.0.0.1-5510 (N5510). [Type]: IAA.
+## Periodical master status checking: I am alive (as a coordinator).
+++ Receive a msg from 127.0.0.1-5512 (N5512).
+   [Type]: AYA.	[Action]: Answer IAA.
+-- Send a msg to 127.0.0.1-5512 (N5512). [Type]: IAA.

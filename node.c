@@ -13,7 +13,7 @@
 #include "msg.h"
 #include "tools.h"
 
-int timeLimit= 10;
+int timeLimit= 15;
 unsigned long  sendFailureProbability;
 unsigned long  timeoutValue;
 int sock;
@@ -157,7 +157,7 @@ int main(int argc, char ** argv) {
 
 
 	printf("Starting up Node %d\n", port);
-	printf("N%d {\"N%d\" : %d }\n", port, port, (*myClock)++);
+	printf("N%d {\"N%d\" : %d }\n", port, port, *myClock);
 	fprintf(logfp, "Starting N%d\n", port);
 	logClock();
 
@@ -351,6 +351,7 @@ int initMsgProcess(char* buffer, struct sockaddr_storage fromAddr){
 	unsigned int fromPort= PrintSocketAddress((struct sockaddr *)&fromAddr, stdout);
 
 	updateClock(myVectorClock, recvMsg.vectorClock);
+	(*myClock)++;
 	fprintf(logfp, "Receive %s from N%u\n", msgTypeString(type), fromPort);
 	logClock();
 
@@ -432,6 +433,7 @@ int msgProcess(char* buffer, struct sockaddr_storage fromAddr){
 	msgType type= recvMsg.msgID;
 
 	updateClock(myVectorClock, recvMsg.vectorClock);
+	(*myClock)++;
 	fprintf(logfp, "Receive %s from N%u\n", msgTypeString(type), fromPort);
 	logClock();
 

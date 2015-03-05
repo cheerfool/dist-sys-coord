@@ -1,3 +1,5 @@
+(?<event>.*)\n(?<host>\S*) (?<clock>{.*})
+
 Starting N5510
 N5510 {"N5510":1}
 Send ELECT to N5511

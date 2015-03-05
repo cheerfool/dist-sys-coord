@@ -52,13 +52,13 @@ void *checkStatus(unsigned long *threadArgs);
 
 //main
 int main(int argc, char ** argv) {
-    //set seed
+	//set seed
 	srandom(510);
-    
+
 	//parameters
 	char *         groupListFileName;
 	char *         logFileName;
-	
+
 	if (argc != 7) {
 		usage(argv[0]);
 		return -1;
@@ -117,7 +117,7 @@ int main(int argc, char ** argv) {
 		return -1;
 	}
 
-    //Validate the sendFailureProbability
+	//Validate the sendFailureProbability
 	if(sendFailureProbability<0 || sendFailureProbability>100)
 		die("Send failure probability should be an integer between 0-100");
 	electCount+= port*1000;
@@ -130,11 +130,11 @@ int main(int argc, char ** argv) {
 	}
 	myClock= &myVectorClock[myIndex].time;
 
-    //Ready to start
+	//Ready to start
 	printf("Starting up Node %d\n", port);
 	printf("N%d {\"N%d\" : %d }\n", port, port, *myClock);
 	fprintf(logfp, "Starting N%d\n", port);
-    logClock(logfp, myVectorClock, port);
+	logClock(logfp, myVectorClock, port);
 
 
 	// Construct the server address structure
@@ -159,7 +159,7 @@ int main(int argc, char ** argv) {
 		die("bind() failed");
 	// Free address list allocated by getaddrinfo()
 	freeaddrinfo(servAddr);
-	
+
 	// Set signal handler for alarm signal
 	struct sigaction handler; // Signal handler
 	handler.sa_handler = CatchAlarm;
@@ -216,33 +216,33 @@ int main(int argc, char ** argv) {
 
 // Handler for SIGALRM (Time out handling)
 void CatchAlarm(int ignored) {
-    printf("Time out. ");
-    if(waitCoord){
-        electing=false;
-        waitCoord=false;
-        callElection(electCount++);
-    }else if(electing){
-        declareCoord();
-    }else if(coord>port){
-        callElection(electCount++);
-    }
+	printf("Time out. ");
+	if(waitCoord){
+		electing=false;
+		waitCoord=false;
+		callElection(electCount++);
+	}else if(electing){
+		declareCoord();
+	}else if(coord>port){
+		callElection(electCount++);
+	}
 }
 
 //Declare the current node itself to be the coordinator
 void declareCoord(){
 	(*myClock)++;
-    fprintf(logfp, "Declare to be coordinator\n");
-    logClock(logfp, myVectorClock, port);
+	fprintf(logfp, "Declare to be coordinator\n");
+	logClock(logfp, myVectorClock, port);
 
-    int i;
-    printf("[Action]: Declare current node N%u to be the coordinator.\n", port);
-    coord= port;
-    master= true;
-    for(i=0; i<gsize; i++){
-        if(ports[i]<port)
-            sendMsg(hosts[i], ids[i], COORD);
-    }
-    electing=false;
+	int i;
+	printf("[Action]: Declare current node N%u to be the coordinator.\n", port);
+	coord= port;
+	master= true;
+	for(i=0; i<gsize; i++){
+		if(ports[i]<port)
+			sendMsg(hosts[i], ids[i], COORD);
+	}
+	electing=false;
 }
 
 //Call an election
@@ -271,7 +271,7 @@ int sendMsgWithId(char host[], char id[], msgType type, unsigned int electId){
 	(*myClock)++;
 	fprintf(logfp, "Send %s to N%s\n", msgTypeString(type), id);
 	logClock(logfp, myVectorClock, port);
-	
+
 	int luck= random()%100;
 	if(luck< sendFailureProbability){
 		printf("send() failed. Random number %d < %d (send failure probability).\n", luck, sendFailureProbability);
@@ -381,7 +381,7 @@ int receiveInitMsg(char* buffer, struct sockaddr_storage fromAddr){
 	}else{
 		printf(" (not in the group list)\n   Action: Discard.\n");
 	}
-		
+
 	//if receive a msg but not valid, wait for the next msg and keep counting time
 	struct sockaddr_storage clntAddr;
 	socklen_t clntAddrLen = sizeof(clntAddr);
@@ -474,36 +474,36 @@ int receiveMsg(char* buffer, struct sockaddr_storage fromAddr){
 
 //Periodically check the status of the coordinator
 void *checkStatus(unsigned long *threadArgs){
-  int period= (int) *threadArgs;
-  while(*myClock < timeLimit+2){
-	  if(!electing && coord>=port){
-		  if(master){
-			  printf("## Periodical master status checking: I am alive (as a coordinator).\n");
-              alarm(period);
-			  (*myClock)++;
-			  fprintf(logfp, "Coordinator status self-checking\n");
-			  logClock(logfp, myVectorClock, port);
-		  }else{
-			  printf("## Periodical master status checking: AYA sent to N%u.\n", coord);
-			  int i;
-			  char *host;
-			  char *id;
-			  for(i=0; i<gsize; i++){
-				  if(ports[i]==coord){
-					  host= hosts[i];
-					  id=ids[i];
-					  break;
-				  }
-			  }
-			  alarm(period);
-			  sendMsg(host, id, AYA);
-		  }
-	  }
-	  sleep(period);
-  }
-  return (NULL);
+	int period= (int) *threadArgs;
+	while(*myClock < timeLimit+2){
+		if(!electing && coord>=port){
+			if(master){
+				printf("## Periodical master status checking: I am alive (as a coordinator).\n");
+				alarm(period);
+				(*myClock)++;
+				fprintf(logfp, "Coordinator status self-checking\n");
+				logClock(logfp, myVectorClock, port);
+			}else{
+				printf("## Periodical master status checking: AYA sent to N%u.\n", coord);
+				int i;
+				char *host;
+				char *id;
+				for(i=0; i<gsize; i++){
+					if(ports[i]==coord){
+						host= hosts[i];
+						id=ids[i];
+						break;
+					}
+				}
+				alarm(period);
+				sendMsg(host, id, AYA);
+			}
+		}
+		sleep(period);
+	}
+	return (NULL);
 }
 
 
-	
+
 

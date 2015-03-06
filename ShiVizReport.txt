@@ -1,0 +1,10 @@
+The setting of this running example is as follows:
+./node 5510 group.txt log5510.txt 10 7 75
+./node 5511 group.txt log5511.txt 5 10 50
+./node 5512 group.txt logt.txt 5 5 0
+./node 5513 group.txt log5513.txt 7 20 0
+The detail of the running process and log information printed to stdout are combined together and can be found in log/logDetail.txt
+
+This is an interesting running example and also helps me to debug my program.
+
+As for the interesting example, I have 4 nodes in total, and N5510 and N5511 both start an election simultaneously, while when ELECT from N5510 reaches N5511, it get answered but N5511 doesn't start a new election since it already starts one and is waiting for COORD. When the highest node N5513 gets the ELECT and starts a new one, after a timeout it declares itself to be the coordinator and announce this to all the other nodes. But after a while N5513 dies and quits, and N5510 first detects this and starts and election (it's actually due to a send failure of AYA), then N5512 becomes the new coordinator. After a while N5512 dies and quits as well. Then N5510 and N5511 are supposed to reach the consensus that N5511 should be the new coordinator. However, since N5510 is set to have the high send failure probability (75%), the ELECT msg from N5510 doesn't reach N5511, so N5510 declares itself to be the coordinator after a time out. But after a short time N5511 also declares itself to be the coordinator and send the COORD msg out to N5510. N5510 Receives the COORD msg from N5511 and reset the coordinator to N5511.

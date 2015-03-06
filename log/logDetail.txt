@@ -42,6 +42,8 @@ send() failed. Random number 28 < 75 (send failure probability).
 Time out. [Action]: Declare current node N5510 to be the coordinator.
 Clock reaches the time limit, program finishes successfully.
 
+
+
 jiangkl@selkirk:hw2$ ./node 5511 group.txt log5511.txt 5 10 50
 Group member list: 
 1: N5510 - 127.0.0.1
@@ -88,6 +90,8 @@ send() failed. Random number 24 < 50 (send failure probability).
 Time out. [Action]: Declare current node N5511 to be the coordinator.
 send() failed. Random number 28 < 50 (send failure probability).
 Clock reaches the time limit, program finishes successfully.
+
+
 
 jiangkl@selkirk:hw2$ ./node 5512 group.txt logt.txt 5 5 0
 Group member list: 
@@ -166,6 +170,8 @@ Time out. [Action]: Declare current node N5512 to be the coordinator.
 -- Send a msg to 127.0.0.1-5510 (N5510). [Type]: COORD.
 -- Send a msg to 127.0.0.1-5511 (N5511). [Type]: COORD.
 Clock reaches the time limit, program finishes successfully.
+
+
 
 jiangkl@selkirk:hw2$ ./node 5513 group.txt log5513.txt 7 20 0
 Group member list: 

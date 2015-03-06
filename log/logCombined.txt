@@ -36,6 +36,8 @@ Send ELECT to N5513
 N5510 {"N5510":17, "N5511":11, "N5512":17, "N5513":16}
 Declare to be coordinator
 N5510 {"N5510":18, "N5511":11, "N5512":17, "N5513":16}
+Receive COORD from N5511
+N5510 {"N5510":19, "N5511":19, "N5512":18, "N5513":16}
 
 Starting N5511
 N5511 {"N5511":1}

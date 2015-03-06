@@ -216,7 +216,8 @@ int main(int argc, char ** argv) {
 
 // Handler for SIGALRM (Time out handling)
 void CatchAlarm(int ignored) {
-	printf("Time out. ");
+	if(electing || coord>port)
+		printf("Time out. ");
 	if(waitCoord){
 		electing=false;
 		waitCoord=false;

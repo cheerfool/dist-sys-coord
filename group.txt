@@ -1,4 +1,4 @@
-127.0.0.1 5510
-127.0.0.1 5511
-127.0.0.1 5512
-127.0.0.1 5513
+remote.cs.ubc.ca 5510
+remote.cs.ubc.ca 5511
+remote.ugrad.cs.ubc.ca 5512
+remote.ugrad.cs.ubc.ca 5513

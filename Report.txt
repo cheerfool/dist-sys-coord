@@ -9,3 +9,4 @@ remote.ugrad.cs.ubc.ca 5512
 remote.ugrad.cs.ubc.ca 5513
 
 The case we use is that node N5511 has high send failure probablity (90%), and first when all the nodes start and some nodes call an election and N5513 becomes the coordinator and send COORD to every node to announce it, then every slave node periodically send AYA msg to the coordinator to check its status. But N5511 fails to receive IAA msg from N5513 since it has high send failure probability, so it calls and election after the timeout. While the ELECT msgs also fail to send out, so it declares itself to be the coordinator. But N5512 also has some some send failure probability and also starts an election after a time out, while its ELECT msgs are sent out succesfully and N5513 again declares itself to be the coordinator and announce it to every node. This time N5510 receives the COORD msg from N5513 and again regards N5513 as the coordinator and then comes back to the group.  
+
